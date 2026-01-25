@@ -1,1 +1,20 @@
-{}
+{
+	"startBanner": "Es wäre sehr hilfreich, wenn du Probleme bei GitHub Issues meldest oder mich direkt per Discord oder E-Mail kontaktierst.",
+	"ggeConfigGenerated": "ggeConfig.json wurde generiert.",
+	"couldntFindPrivateKey": "privateKey konnte nicht gefunden werden! Wechsle zurück in den HTTP-Modus.",
+	"couldntFindCertificate": "Zertifikat konnte nicht gefunden werden! Wechsle zurück in den HTTP-Modus.",
+	"couldntAccessFont": "Zugriff auf die Schriftart fehlgeschlagen.",
+	"couldntSetupDiscord": "Discord konnte nicht eingerichtet werden.",
+	"configurationsMissing": "Folgende Konfigurationen fehlen:",
+	"missingDiscordID": "Discord-ID konnte nicht abgerufen werden.",
+	"missingDiscordUserID": "Discord-Benutzer-ID konnte nicht abgerufen werden.",
+	"missingGuildID": "Gilden-ID konnte nicht abgerufen werden.",
+	"uuidInvalid": "Benutzerkennung ist ungültig.",
+	"gameAccountSessionAlreadyInUse": "Spielkonto-Sitzung wird bereits verwendet.",
+	"failedToJoinEventServer" : "Beitritt zum Event-Server fehlgeschlagen.",
+	"noThreadWorker": "Thread-Worker nicht gefunden.",
+	"couldntFindWebClientIndex" : "Index des Web-Client-Benutzers konnte nicht gefunden werden.",
+	"started": "Gestartet.",
+	"restartCanceledReasonBotStoppedByUser" : "Neustart abgebrochen. Grund: Bot wurde vom Benutzer gestoppt.",
+	"restartDelay" : "Bot-Prozess beendet. Warte 10 Sekunden vor dem Neustart, um Spam zu vermeiden..."
+}
