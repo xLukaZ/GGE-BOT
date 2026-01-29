@@ -24,15 +24,15 @@ if (isMainThread)
         name: name,
         description: "Advanced recruitment for each castle",
         pluginOptions: [
-            { type: "Text", label: "Level (1-3)", key: "level", default: "3" },
-            { type: "Checkbox", label: "HB: Active?", key: "en_HB", default: true },
-            { type: "Select", label: "HB Troop", key: "tr_HB", selection: troopSelection, default: 0 },
-            { type: "Checkbox", label: "AP 1: Active?", key: "en_AP1", default: false },
-            { type: "Select", label: "AP 1 Troop", key: "tr_AP1", selection: troopSelection, default: 5 },
-            { type: "Checkbox", label: "AP 2: Active?", key: "en_AP2", default: false },
-            { type: "Select", label: "AP 2 Troop", key: "tr_AP2", selection: troopSelection, default: 5 },
-            { type: "Checkbox", label: "AP 3: Active?", key: "en_AP3", default: false },
-            { type: "Select", label: "AP 3 Troop", key: "tr_AP3", selection: troopSelection, default: 5 },
+            { type: "Text", label: "Recruit Level (1-3)", key: "level", default: "3" },
+            { type: "Checkbox", label: "Main Castle: Active?", key: "en_HB", default: true },
+            { type: "Select", label: "Main Castle Troop", key: "tr_HB", selection: troopSelection, default: 0 },
+            { type: "Checkbox", label: "Outpost 1: Active?", key: "en_AP1", default: false },
+            { type: "Select", label: "Outpost 1 Troop", key: "tr_AP1", selection: troopSelection, default: 5 },
+            { type: "Checkbox", label: "Outpost 2: Active?", key: "en_AP2", default: false },
+            { type: "Select", label: "Outpost 2 Troop", key: "tr_AP2", selection: troopSelection, default: 5 },
+            { type: "Checkbox", label: "Outpost 3: Active?", key: "en_AP3", default: false },
+            { type: "Select", label: "Outpost 3 Troop", key: "tr_AP3", selection: troopSelection, default: 5 },
             { type: "Checkbox", label: "ICE: Active?", key: "en_Ice", default: false },
             { type: "Select", label: "Ice Troop", key: "tr_Ice", selection: troopSelection, default: 4 },
             { type: "Checkbox", label: "SAND: Active?", key: "en_Sand", default: false },
@@ -64,12 +64,18 @@ while(buildings[startBeri]) {
 }
 
 events.once("load", async () => {
+    console.log(`[${name}] Plugin loaded and starting...`);
     let resourceCastleList = await getResourceCastleList()
-    let greenAPs = resourceCastleList.castles
-        .find(c => c.kingdomID == KingdomID.greatEmpire)
-        .areaInfo.filter(a => a.type === 1 && a.extraData[0] !== 1)
-        .map(a => a.extraData[0])
-        .sort((a, b) => a - b);
+    
+    // Find Green APs
+    let greenEmpire = resourceCastleList.castles.find(c => c.kingdomID == KingdomID.greatEmpire);
+    let greenAPs = [];
+    if (greenEmpire) {
+        greenAPs = greenEmpire.areaInfo
+            .filter(a => a.type === 1 && a.extraData[0] !== 1)
+            .map(a => a.extraData[0])
+            .sort((a, b) => a - b);
+    }
 
     let recruitTroops = (KID, AID) => kingdomLock(async () => {
         let isEnabled = false; let selName = "";
@@ -88,19 +94,33 @@ events.once("load", async () => {
 
         if (!isEnabled || !selName) return 0;
 
+        console.log(`[${name}] Checking Castle KID:${KID} AID:${AID} (${selName})...`);
+
         let baseID = troopMapping[selName];
         sendXT("jca", JSON.stringify({"CID":AID,"KID":KID}))
         let [obj] = await waitForResult("jaa", 1000 * 10, o => o.grc.KID == KID && o.grc.AID == AID)
+        
         let bList = KID != KingdomID.berimond ? list : listBeri
         let bObj = obj.gca.BD.find(e => bList.includes(e[0])) 
-        if(!bObj) return 0
+        if(!bObj) {
+            console.log(`[${name}] No barracks found in AID:${AID}`);
+            return 0;
+        }
         
         sendXT("spl", JSON.stringify({LID: KID != KingdomID.berimond ? 0 : 3}))
         let [obj2] = await waitForResult("spl", 1000 * 10) 
 
-        let recruitedCount = 0;
+        let recruitedAny = false;
         for (let i = 0; i < obj2.QS.length; i++) {
-            if(obj2.QS[i].P || obj2.QS[i].SI.RUT == 0) continue
+            const slot = obj2.QS[i];
+            
+            // CORRECTED LOGIC: RUT !== 0 means it's ALREADY recruiting. We want RUT == 0 (free).
+            if(slot.P || (slot.SI && slot.SI.RUT !== 0)) {
+                continue; 
+            }
+
+            console.log(`[${name}] Found free slot ${i} in AID:${AID}. Starting recruitment...`);
+
             let tPath = []; let curr = baseID;
             while(units[curr]){
                 tPath.push(units[curr].wodID);
@@ -109,44 +129,53 @@ events.once("load", async () => {
             }
             if(baseID == 229) tPath.push(493);
             if(baseID == 218) tPath.push(489);
-            let targetID = tPath[Math.min(Number(pluginOptions.level || 1) - 1, tPath.length - 1)];
+
+            let level = Number(pluginOptions.level) || 1;
+            let targetID = tPath[Math.min(level - 1, tPath.length - 1)];
             
             let sSize = Number(buildings.find(e => e?.wodID == bObj[0])?.stackSize) || 5;
             let bItems = obj.gca.CI.find(e => e.OID == bObj[1]);
-            if (bItems?.CIL.find(e => e.CID == 14)) sSize += 80;
-            
+            if (bItems?.CIL.find(e => e.CID == 14)) sSize += 80; // Practice dummy bonus
+
             if(KID == KingdomID.berimond) {
                 try {
                     const det = await ClientCommands.getDetailedCastleList()();
                     const beri = det.castles.find(c => c.kingdomID == KID);
                     if(beri) {
-                        let inv = beri.unitInventory || beri.units || [];
-                        let curAux = inv.reduce((s, u) => {
-                            let uInfo = units.find(x => x?.wodID == (u.unitID || u.WID));
-                            return uInfo?.isAuxiliary ? s + Number(u.ammount || u.A) : s;
-                        }, 0);
-                        let maxAux = beri.getProductionData?.maxAuxilariesTroops || 100;
-                        sSize = Math.min(sSize, maxAux - curAux);
+                        let inv = beri.unitInventory || [];
+                        let curAux = inv.reduce((s, u) => units.find(x => x?.wodID == u.unitID)?.isAuxiliary ? s + Number(u.ammount) : s, 0);
+                        sSize = Math.min(sSize, (beri.getProductionData?.maxAuxilariesTroops || 100) - curAux);
                     }
                 } catch (e) {}
             }
 
-            if(sSize <= 0) continue;
-            sendXT("bup", JSON.stringify({ "LID": KID != KingdomID.berimond ? 0 : 3, "WID": targetID, "AMT": sSize, "PO": -1, "PWR": 0, "SK": 73, "SID": KID != KingdomID.berimond ? 2 : 10, "AID": AID }));
-            await waitForResult("bup", 4000);
-            recruitedCount += sSize;
-        }
-        
-        if (recruitedCount > 0) {
-            console.log(`[${name}] KID:${KID} AID:${AID} - Recruited ${recruitedCount} x ${selName}`);
+            if(sSize <= 0) {
+                console.log(`[${name}] Stack size 0 or limit reached in AID:${AID}`);
+                continue;
+            }
+
+            sendXT("bup", JSON.stringify({
+                "LID": KID != KingdomID.berimond ? 0 : 3,
+                "WID": targetID,
+                "AMT": sSize, 
+                "PO": -1, "PWR": 0, "SK": 73,
+                "SID": KID != KingdomID.berimond ? 2 : 10, "AID": AID
+            }));
+            await waitForResult("bup", 5000);
+            console.log(`[${name}] Success: Recruited ${sSize} units in AID:${AID}`);
+            recruitedAny = true;
         }
 
         if(KID != KingdomID.berimond) sendXT("ahr", JSON.stringify({ID:0,T:6}));
         sendXT("spl", JSON.stringify({LID: KID != KingdomID.berimond ? 0 : 3}))
         let [obj3] = await waitForResult("spl", 1000 * 10)
-        setTimeout(() => recruitTroops(KID,AID), (obj3.TCT * 1000) + 5000)
+        
+        let waitTime = (obj3.TCT > 0) ? (obj3.TCT * 1000) + 10000 : 60000;
+        console.log(`[${name}] Castle AID:${AID} done. Next check in ${Math.round(waitTime/60000)} min.`);
+        setTimeout(() => recruitTroops(KID,AID), waitTime);
     })
 
+    // Start recursion for all castles
     for (const res of resourceCastleList.castles) {
         if(res.kingdomID == KingdomID.stormIslands) continue;
         for (const area of res.areaInfo) {
